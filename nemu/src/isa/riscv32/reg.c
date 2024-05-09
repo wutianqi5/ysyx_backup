@@ -24,8 +24,23 @@ const char *regs[] = {
 };
 
 void isa_reg_display() {
+  int len = sizeof(cpu.gpr)/sizeof(cpu.gpr[0]);
+  for(int i=0;i<len;++i)
+  {
+    printf("reg %s ----> %u \n",regs[i],cpu.gpr[i]);
+  }
 }
 
-word_t isa_reg_str2val(const char *s, bool *success) {
+word_t isa_reg_str2val(char *s, bool *success) {
+  int len = sizeof(cpu.gpr)/sizeof(cpu.gpr[0]);
+  for(int i=0;i<len;++i)
+  {
+    if(strcmp(s,regs[i])==0)
+    {
+      return cpu.gpr[i];
+    }
+  }
+  panic("找不到对应的寄存器！是不是输错了？");
+  *success = false;
   return 0;
 }

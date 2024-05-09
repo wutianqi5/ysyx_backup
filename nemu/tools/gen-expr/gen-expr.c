@@ -21,8 +21,10 @@
 #include <string.h>
 
 // this should be enough
-static char buf[65536] = {};
-static char code_buf[65536 + 128] = {}; // a little larger than `buf`
+static char* buf ;
+static int len_buf;
+static int capacity_buf;
+static char* code_buf; // a little larger than `buf`
 static char *code_format =
 "#include <stdio.h>\n"
 "int main() { "
@@ -31,11 +33,111 @@ static char *code_format =
 "  return 0; "
 "}";
 
+static int choose(int n){
+  return rand()%n;
+}
+
+static int augment_buf(){
+  char* new_buf = (char *)realloc(buf,(capacity_buf+50000)*sizeof(char));
+  char* new_code_buf = (char *)realloc(code_buf,(capacity_buf+51000)*sizeof(char));
+  if(!new_buf || !new_code_buf){
+    free(buf);
+    free(code_buf);
+    return -1;
+  }
+  else {
+    buf=new_buf;
+    code_buf = new_code_buf;
+    capacity_buf+=50000;
+  }
+  return 0;
+}
+
+static void gen_num(){
+  int num = choose(10)+1;
+  char num_str [10];
+  int ret = snprintf(num_str,sizeof(num_str)/sizeof(char),"%d",num);
+  len_buf += ret; 
+  //扩充buf数组
+  if(len_buf > capacity_buf)
+  {
+    ret=augment_buf();
+    if(ret<0){
+      printf("ERROR,Overflow\n");
+      return;
+    }
+  }
+
+    strcat(buf,num_str);
+ 
+}
+
+static void gen(char e){
+  char str[2];
+  str[0]=e;
+  str[1]='\0';
+  len_buf += 1; 
+  //扩充buf数组
+  if(len_buf > capacity_buf)
+  {
+    int ret=augment_buf();
+    if(ret<0){
+      printf("ERROR,Overflow\n");
+      return;
+    }
+  }
+  strcat(buf,str);
+}
+
+static void gen_rand_op(){
+  int choose_num = choose(4);
+  len_buf += 1; 
+  //扩充buf数组
+  if(len_buf > capacity_buf)
+  {
+    int ret=augment_buf();
+    if(ret<0){
+      printf("ERROR,Overflow\n");
+      return;
+    }
+  }
+  switch (choose_num)
+  {
+  case 0:
+    strcat(buf,"+");
+    break;
+  
+  case 1:
+    strcat(buf,"-");
+    break;
+  
+  case 2:
+    strcat(buf,"*");
+    break;
+  
+  case 3:
+    strcat(buf,"-");
+    break;
+  
+  default:
+    break;
+  }
+}
+
 static void gen_rand_expr() {
-  buf[0] = '\0';
+  switch (choose(3)) {
+  case 0: gen_num(); break;
+  case 1: gen('('); gen_rand_expr(); gen(')'); break;
+  default: gen_rand_expr(); gen_rand_op(); gen_rand_expr(); break;
+  
+}
 }
 
 int main(int argc, char *argv[]) {
+  buf = (char *)malloc(65536 * sizeof(char));
+  code_buf = (char *)malloc(66000 *sizeof(char));
+  capacity_buf = 65536;
+  len_buf=0;
   int seed = time(0);
   srand(seed);
   int loop = 1;
@@ -44,6 +146,7 @@ int main(int argc, char *argv[]) {
   }
   int i;
   for (i = 0; i < loop; i ++) {
+    buf[0] = '\0';
     gen_rand_expr();
 
     sprintf(code_buf, code_format, buf);
@@ -53,7 +156,7 @@ int main(int argc, char *argv[]) {
     fputs(code_buf, fp);
     fclose(fp);
 
-    int ret = system("gcc /tmp/.code.c -o /tmp/.expr");
+    int ret = system("gcc /tmp/.code.c -Wall -Werror -o /tmp/.expr");
     if (ret != 0) continue;
 
     fp = popen("/tmp/.expr", "r");
@@ -65,5 +168,7 @@ int main(int argc, char *argv[]) {
 
     printf("%u %s\n", result, buf);
   }
+  free(buf);
+  free(code_buf);
   return 0;
 }

@@ -18,6 +18,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include "sdb.h"
+#include "memory/vaddr.h"
 
 static int is_batch_mode = false;
 
@@ -54,6 +55,85 @@ static int cmd_q(char *args) {
 
 static int cmd_help(char *args);
 
+static int cmd_p(char *args){
+  bool success = true;
+  word_t res = expr(args,&success);
+
+  if(!success){
+    puts("ERROR");
+    return -1;
+  }
+  else{
+    printf("Result is : %u\n",res);
+  }
+  return 0;
+}
+
+static int cmd_x(char *args){
+  if (args == NULL)
+    return -1;
+  
+  char *num = strtok(args," ");
+  char *expr = strtok(NULL," ");
+
+  if(num == NULL || expr == NULL)
+  {
+    printf("Parameter Error\n");
+    return -1;
+  }
+  int n = strtol(num,NULL,10);
+  vaddr_t addr = strtol(expr,NULL,16);
+
+  for(int i=0;i<n;i++)
+  {
+    word_t data = vaddr_read(addr+i*4,4);
+    printf("0x%08x",addr+i*4);
+    printf("  0x%08x\n",data);
+  }
+  return 0;
+
+  
+  
+}
+
+void list_all_wp();
+static int cmd_info(char *args){
+  if(strcmp(args,"r")==0){
+    isa_reg_display();
+  }
+
+  if(strcmp(args,"w")==0){
+    list_all_wp();
+  }
+
+  return 0;
+}
+
+static int cmd_si(char *args) {
+  if (args == NULL){
+    cpu_exec(1);
+  }
+  else{
+    int num_execution = atoi(args);
+    cpu_exec(num_execution);
+  }
+  return 0;
+}
+
+void new_wp(char *args);
+void delete_wp(int no);
+static int cmd_w(char *args){
+  if(args==NULL)
+    return 1;
+  new_wp(args);
+  return 0;
+}
+static int cmd_d(char *args){
+  int n=strtol(args,NULL,10);
+  delete_wp(n);
+  return 0;
+}
+
 static struct {
   const char *name;
   const char *description;
@@ -62,12 +142,20 @@ static struct {
   { "help", "Display information about all supported commands", cmd_help },
   { "c", "Continue the execution of the program", cmd_c },
   { "q", "Exit NEMU", cmd_q },
+  {"si","Pause the program after executing N instructions in one step,when N is not given, it defaults to 1",cmd_si},
+  {"info","info r,print register status; info w,print watch point information",cmd_info},
+  {"x","x N EXPR,Find the value of the expression EXPR and use the result as the starting memory address, \
+  output N consecutive 4 bytes in hexadecimal format",cmd_x},
+  {"p","p EXPR,Get the value of the expression EXPR. ",cmd_p},
+  {"w","w EXPR,Pause program execution when the value of the expression EXPR changes",cmd_w},
+  {"d","d N,Delete watchpoint with serial number N",cmd_d}
 
   /* TODO: Add more commands */
 
 };
 
 #define NR_CMD ARRLEN(cmd_table)
+
 
 static int cmd_help(char *args) {
   /* extract the first argument */
@@ -125,7 +213,11 @@ void sdb_mainloop() {
     int i;
     for (i = 0; i < NR_CMD; i ++) {
       if (strcmp(cmd, cmd_table[i].name) == 0) {
-        if (cmd_table[i].handler(args) < 0) { return; }
+        if (cmd_table[i].handler(args) < 0) { 
+          if (strcmp(cmd, "q") == 0) {
+            nemu_state.state = NEMU_QUIT; // set "QUIT" state when q 优雅的退出
+          }
+          return; }
         break;
       }
     }
@@ -134,10 +226,31 @@ void sdb_mainloop() {
   }
 }
 
+static void test_expr(int test){
+  if(!test) return;
+  FILE *fp = fopen("/home/pan/ysyx-workbench/nemu/tools/gen-expr/build/input","r");
+  if(!fp) perror("文件不存在！");
+  unsigned int correct_num;
+  char expr_str[50000];
+  while(true){
+    int ret=fscanf(fp,"%u %s",&correct_num,expr_str);
+    if(ret != 2) break;
+    bool success = true;
+    word_t expr_res = expr(expr_str,&success);
+    assert(success);
+    if(correct_num != expr_res)
+    {
+      printf("正确值应该是：%u,而算出的值为:%u",correct_num,expr_res);
+    }
+  }
+  fclose(fp);
+  printf("Pass");
+}
+
 void init_sdb() {
   /* Compile the regular expressions. */
   init_regex();
-
+  test_expr(0);
   /* Initialize the watchpoint pool. */
   init_wp_pool();
 }

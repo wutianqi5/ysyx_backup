@@ -10,3 +10,5 @@
 !Kconfig
 include/config
 include/generated
+
+../digital_circuit_experiment/Ref/12367
