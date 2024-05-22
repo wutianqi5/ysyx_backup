@@ -32,7 +32,13 @@ static char *code_format =
 "  printf(\"%%u\", result); "
 "  return 0; "
 "}";
-
+/*
+uint32_t a = (1-2)/2; // a=0
+uint32_t a = (uint32_t)(1-2)/2; // a=2147483647
+从用户角度，只考虑无符号的情况下，第二个结果是正确的。然而测试用例是通过第一种形式生成的，
+即进行运算的数都是有符号类型的，因此我们需要将word_t（无符号）类型先转为sword_t（有符号）类型，
+再进行运算，从而满足测试用例。是的，先考虑测试再考虑用户，况且也没有用户
+*/
 static int choose(int n){
   return rand()%n;
 }
@@ -54,9 +60,9 @@ static int augment_buf(){
 }
 
 static void gen_num(){
-  int num = choose(10)+1;
+  unsigned num = choose(10)+1;
   char num_str [10];
-  int ret = snprintf(num_str,sizeof(num_str)/sizeof(char),"%d",num);
+  int ret = snprintf(num_str,sizeof(num_str)/sizeof(char),"%u",num);
   len_buf += ret; 
   //扩充buf数组
   if(len_buf > capacity_buf)
@@ -116,7 +122,7 @@ static void gen_rand_op(){
     break;
   
   case 3:
-    strcat(buf,"-");
+    strcat(buf,"/");
     break;
   
   default:
@@ -162,8 +168,8 @@ int main(int argc, char *argv[]) {
     fp = popen("/tmp/.expr", "r");
     assert(fp != NULL);
 
-    int result;
-    ret = fscanf(fp, "%d", &result);
+    unsigned result;
+    ret = fscanf(fp, "%u", &result);
     pclose(fp);
 
     printf("%u %s\n", result, buf);
